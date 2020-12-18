@@ -53,6 +53,7 @@ log(\lambda)=a
 $$
 On a $log(\lambda)=a \Leftrightarrow \lambda=e^a$.
 ## Question 1
+Donner $E(yi|a)$ d'après ce modèle en fonction de *a*.
 
 $$
 \begin{array}{ll}
@@ -62,7 +63,9 @@ E(y_i|a) &= E(\mathcal{P}ois(\lambda))\\
 \end{array}
 $$
 
-## Question 2
+## Question 2 
+Mettre en place ce modèle avec, comme loi a priori sur a, une loi normale d'espérance nulle et de variance 1000. Faire 30000 itérations et enlever 1000 itérations pour le temps de chauffe. D'après l'history et les autocorrélations, voyez-vous un problème de mélangeance de l'algorithme ? Si oui, résoudre ce problème en justifiant
+
 
 Réalisation du modèle avec JAGS :
 ```{r, warning = FALSE, message = FALSE, result = 'hide'}
@@ -82,7 +85,7 @@ parametres_modele1 <- c("a")
 # Valeurs initiales
 inits_1 <- list("a" = 0)
 inits_modele1 <- list(inits_1)
-n_iter <- 50000  # Nombre d'iterations 
+n_iter <- 30000  # Nombre d'iterations 
 n_burn <- 1000 # Burn in
 
 # Faire tourner le modèle avec la fonction jags
@@ -188,10 +191,104 @@ ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = valu
   theme(legend.position = "none")
 ```
 
+## Question 3 : 
+Que vaut le nombre d’itérations pour les calculs ? Que vaut le nombre d’itérations « effectif » ?
+
+Le nombre d'itérations pour notre calcul est de 240000 (30 000 * 8) mais nous avons mis un thin de _10_, le nombre d'itéartions effectif est de 29875. Cela représente le nombre d'itérations qui ont apportées de l'information utile à notre modèle.
+
+```{r}
+effectiveSize(modele1_fit_thin)
+```
+
+## Question 4 : 
+Donnez la moyenne a posteriori et l'intervalle de crédibilité à 95% de a. 
+
+La moyenne à posteriori du *a* est de 3.00 avec un intervalle de crédibilité à 95% à [2.86;3.13]
+````{r}
+
+res1 = summary(modele1_fit_thin_mcmc)
+resmoy1 = as.data.frame(res1[[1]])
+resq1 = as.data.frame(res1[[2]])
 
 
+a1_2.5 = resq1$'2.5%'[1]
+a1_97.5 = resq1$'97.5%'[1]
+
+````
+
+## Question 5 : 
+Que vaut le DIC ? Que vaut l'estimation de la complexité du modèle ? Vous semble-t-elle logique ?
+
+Le DIC vaut 253 et l'estimation de la complexité du modèle 1 (pD). cela est cohérent puisque nous n'avions qu'un seul paramètre *a*.
+
+```{r}
+print(modele1_fit_thin)
+
+```
+
+## Question 6 : 
+Refaire tourner ce modèle (30000 itérations et enlever 1000 itérations pour le temps de chauffe) mais avec cette fois-ci comme loi a priori sur a, une loi normale d'espérance nulle et de variance 10000. Donnez la moyenne a posteriori et l'intervalle de crédibilité à 95% de a et commentez. 
+
+Nous avons donc réalisé le même modèle mais avec une loi à priori sur a de variance 10 000 contre 1 000 initialement. Ce procédé nous permet d'utiliser une loi encore moins infiormative et de voir si cette dernière a eu un impact sur le calcul de nos premirers résultats.
+
+Nous avons donc réitéré ce modèle, vérifié que la convergence était atteinte et qu'il n'y avait pas d'autocorrélation (nous avons gardé comme paramètre un thin à 8 et par conséquent un nombre d'itération à 30 000 * 8 pour garder environ 30 0000 intértions effectives).
+
+Les résultats sont semblable entre les deux modèles. Tout d'abord le DIC et l'estimation de a complexité du modèle sont identique : respectivement 253 et 1.
+
+La moyenne de *a* est quasiment identique à  2.998186 contre 2.997857 pour le modèle initial et il en est de même pour les bornes de l'intervalle de crédibilité à 95% [2.857767;3.135289] pour notre nouveau modèle contre [2.858005;3.133286] pour le modèle précédent.
+
+La modification de la loi à priori n'a quasiment pas modifié les résultats obtenus. Nous pouvons donc considéré que la première loi à une variance suffisante pour être considérée comme non informative.
+
+```{r}
+modele_1bis <- function() {
+  # Modèle pour yi
+  for (i in 1:10) {
+    nb_pannes[i] ~ dpois(exp(a))
+  }
+  # Loi a priori de a
+  a ~ dnorm(0, 0.0001)
+}
+# Paramètres à recueillir
+parametres_modele1 <- c("a")
+# Valeurs initiales
+inits_1 <- list("a" = 0)
+inits_modele1 <- list(inits_1)
+n_iter <- 30000  # Nombre d'iterations 
+n_burn <- 1000 # Burn in
+
+modele1bis_fit <- jags(data = donnees,
+                    inits = inits_modele1,
+                    parameters.to.save = parametres_modele1, 
+                    n.chains = length(inits_modele1),
+                    n.iter = n_iter*8, 
+                    n.burnin = 1000, 
+                    n.thin = 8,
+                    model.file = modele_1) 
+modele1bis_fit_mcmc <- as.mcmc(modele1bis_fit)
+
+# confirmation convergence et de l'absence d'autorcoriélation
+gg_modele1bis <- ggs(modele1bis_fit_mcmc)
+ggplot(gg_modele1bis %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 1000 ; Prise d'une valeur sur 8")
+ggs_autocorrelation(gg_modele1bis)
+
+# Même BIC et même complexité
+print(modele1bis_fit)
+
+# Moyenne et IC.95% identiques
+res1bis = summary(modele1bis_fit_mcmc)
+resmoy1bis = as.data.frame(res1bis[[1]])
+resq1bis = as.data.frame(res1bis[[2]])
 
 
+a1bis_2.5 = resq1bis$'2.5%'[1]
+a1bis_97.5 = resq1bis$'97.5%'[1]
+```
 
 
 
@@ -412,12 +509,6 @@ a_97.5 = resq$'97.5%'[1]
 b0_2.5 = resq$'2.5%'[2]
 b0_97.5 = resq$'97.5%'[2]
 
-
-lambda = exp(resmoy$Mean[1] + resmoy$Mean[2]*t)
-lambdainf = exp(aaq2.5)
-
-aaq97.5 = resq$'97.5%'[1]
-thetasup = exp(aaq97.5)
 ````
 
 Nous avons également représenté le densityplot de chaque variable
