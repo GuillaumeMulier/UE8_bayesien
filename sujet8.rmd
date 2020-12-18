@@ -18,6 +18,9 @@ library(R2jags)
 library(lattice)
 library(ggmcmc)
 library(ggtext)
+library(broom.mixed)
+library(flextable)
+library(patchwork)
 
 theme_set(theme_light() +
             theme(plot.title = element_markdown(),
@@ -27,6 +30,8 @@ theme_set(theme_light() +
                     color = "white", fill = "#7888C0", box.color = "#000066",
                     halign = 0.5, linetype = 1, r = unit(3, "pt"), width = unit(0.75, "npc"),
                     padding = margin(2, 0, 1, 0), margin = margin(3, 3, 3, 3))))
+
+options("scipen" = 100)
 ```
 
 # Les données
@@ -66,7 +71,7 @@ $$
 ## Question 2
 
 Réalisation du modèle avec JAGS :
-```{r, warning = FALSE, message = FALSE, result = 'hide'}
+```{r, warning = FALSE, message = FALSE, results = 'hide'}
 # Données à présenter sous forme d'une liste
 donnees <- as.list(sncf_machines)
 # Modèle dans langage BUGS et pas en langage R
@@ -97,12 +102,13 @@ modele1_fit <- jags(data = donnees,
                     n.thin = 1,
                     model.file = modele_1) 
 modele1_fit_mcmc <- as.mcmc(modele1_fit)
+gg_modele1 <- ggs(modele1_fit_mcmc)
+ess_1 <- effectiveSize(modele1_fit_mcmc)
 ```
 
 On regarde si le paramètre a estimé a bien convergé.
 
 ```{r, fig.width = 10, fig.height = 7}
-gg_modele1 <- ggs(modele1_fit_mcmc)
 ggplot(gg_modele1 %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
   geom_line() +
   geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
@@ -113,18 +119,18 @@ ggplot(gg_modele1 %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
        subtitle = "Initialisation de a à 0")
 ```
 
-On voit que la valeur du paramètre *a* reste autour de la valeur 3 et n'a pas l'air de s'écarter beaucoup de cette valeur. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. Nous allons ensuite vérifier si les valeurs des paramètres estimés  
+On voit que la valeur du paramètre *a* reste autour de la valeur 3 et n'a pas l'air de s'écarter beaucoup de cette valeur. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. Nous allons ensuite vérifier si les maillons de la chaîne sont bien indépendants les uns des autres.
 
 ```{r}
 ggs_autocorrelation(gg_modele1)
 ```
 
-On voit que pour l'estimation de a, il y a corrélation jusqu'à la 3ème mesure. Pour la déviance, en revanche, cela va jusquà 8. Nous allons donc prendre une estimation sur 8 pour essayer de casser cette autocorrélation.
+On voit que pour l'estimation de a, il y a corrélation jusqu'à la 3ème mesure. Pour la déviance, en revanche, cela va jusquà 8. Cela est confirmé par le nombre d'itérations effectives qui est diminué par rapport aux 50000 itérations faites : `r as.numeric(ess_1["a"])` pour l'estimation de a et `r as.numeric(ess_1["deviance"])` pour l'estimation de la déviance du modèle.
 
-```{r, warning = FALSE, message = FALSE, result = 'hide'}
+Nous allons donc prendre un décallage de 8 pour essayer de casser cette autocorrélation. De plus, nous appliquerons un burn-in de 1000 observations pour éviter de prendre des itérations qui n'ont pas encore convergé.
+
+```{r, warning = FALSE, message = FALSE, results = 'hide'}
 n_thin <-  8
-# Faire tourner le modèle avec la fonction jags
-# D'abord sans thin, ni burn in
 modele1_fit_thin <- jags(data = donnees,
                          inits = inits_modele1,
                          parameters.to.save = parametres_modele1, 
@@ -134,10 +140,23 @@ modele1_fit_thin <- jags(data = donnees,
                          n.thin = n_thin,
                          model.file = modele_1) 
 modele1_fit_thin_mcmc <- as.mcmc(modele1_fit_thin)
+gg_modele1_thin <- ggs(modele1_fit_thin_mcmc)
+ess_1_thin <- effectiveSize(modele1_fit_thin_mcmc)
+```
+
+Le modèle obtenu est le suivant :
+
+```{r}
+tidy(modele1_fit_thin) %>% 
+  mutate(across(estimate:std.error, ~ round(.x, 3))) %>% 
+  flextable() %>% 
+  set_header_labels(term = "Paramètre estimé",
+                    estimate = "Estimation",
+                    std.error = "Ecart-Type") %>% 
+  autofit()
 ```
 
 ```{r, fig.width = 10, fig.height = 7}
-gg_modele1_thin <- ggs(modele1_fit_thin_mcmc)
 ggplot(gg_modele1_thin %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
   geom_line() +
   scale_x_continuous(labels = scales::comma_format()) +
@@ -153,11 +172,11 @@ En ne prenant qu'une observation sur 8, on voit que le traceplot reste similaire
 ggs_autocorrelation(gg_modele1_thin)
 ```
 
-Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance a été réglé et que maintenant il n'y a plus d'auto-corrélation pour le paramètre a estimé.
+Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance a été réglé et que maintenant il n'y a plus d'auto-corrélation pour le paramètre a estimé. De plus, le nombre d'itérations effectives est maintenant autour des 49875 itérations faites : `r round(ess_1_thin["a"], 0)` pour l'estimation de a et `r round(ess_1_thin["deviance"], 0)` pour l'estimation de la déviance du modèle (nous pensons que le chiffre dépassant 50000 pour a est soit lié au burn in de 1000, soit au fait que les observations soient très décorrélées).
 
 Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié a à -5, 0 et 5 et regardé comment se comportait le modèle.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, results = 'hide'}
 inits_2 <- list("a" = 5)
 inits_3 <- list("a" = -5)
 inits_modele1_mult <- list(inits_1, inits_2, inits_3)
@@ -171,23 +190,109 @@ modele1_fit_mult <- jags(data = donnees,
                          model.file = modele_1) 
 modele1_fit_mult_mcmc <- as.mcmc(modele1_fit_mult)
 gg_modele1_mult <- ggs(modele1_fit_mult_mcmc)
+ess_1_mult <- effectiveSize(modele1_fit_mult)
 ```
 
 ```{r}
-ggs_autocorrelation(gg_modele1_mult) +
-  facet_grid(Chain ~ Parameter)
+ggs_autocorrelation(gg_modele1_mult %>% mutate(Chain = paste0("Chaîne n°", Chain))) +
+  facet_wrap(~ Chain + Parameter, ncol = 3, dir = "v") +
+  theme(legend.position = "none")
 ```
 
+Pour les 3 chaînes, on ne voit pas d'auto-corrélation dans notre modèle. Aussi, le nombre d'itérations effectives est resté autour des 50000 itérations faites par chaîne, soit 149625 itérations en tout après retrait des 1000 itérations de burn-in : `r round(ess_1_mult["a"])` pour l'estimation de a et `r round(ess_1_mult["deviance"])` pour l'estimation de la déviance du modèle (ici, on ne doit plus avoir aucune corrélation vu que le nombre effectif est égal au nombre brut).
+
 ```{r}
-ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+plot1 <- ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
   geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
-  geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
   scale_x_continuous(labels = scales::comma_format()) +
   labs(x = "Itération",
        y = "a",
        title = "Traceplot de l'estimation de a par MCMC avec 3 chaînes") +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        plot.title = element_text(size = 10))
+plot2 <- ggplot(gg_modele1_mult %>% filter(Parameter == "a") %>% mutate(Chain = paste0("Chaîne n°", Chain)), aes(x = value, color = as.factor(Chain), fill = as.factor(Chain))) +
+  geom_density(alpha = 0.3) +
+  scale_color_discrete(name = NULL) +
+  scale_fill_discrete(name = NULL) +
+  labs(x = "a",
+       y = "Densité")
+plot1 / plot2
 ```
+
+On peut voir que les 3 chaînes convergent bien vers la même valeur pour 3 initialisation différentes du paramètre a. Cela se voit sur le traceplot qui montre que les estimations de a restent autour de la même valeur, mais aussi sur le graphique des densités de a pour chaque chaîne qui montre des densités superposables pour les 3 chaînes.
+
+Ainsi, voici notre estimation du paramètre a pour notre modèle avec 3 chaînes, 400000 itérations par chaîne avec 1000 itérations de burn-in et la conservation d'une itération sur 8 :
+
+```{r}
+tidy(modele1_fit_mult) %>% 
+  mutate(across(estimate:std.error, ~ round(.x, 3))) %>% 
+  flextable() %>% 
+  set_header_labels(term = "Paramètre estimé", 
+                    estimate = "Estimation", 
+                    std.error = "Ecart-Type") %>% 
+  autofit()
+```
+
+Cette estimation est très proche à celle faite sur une chaîne précédemment.
+
+## Question 3
+
+Pour le modèle final retenu avec 3 chaînes, il y avait 49875 itérations faites par chaîne, soit 149625 itérations au total. Le nombre d'itérations effectif était le même : `r round(max(ess_1_mult))`.
+
+Pour le modèle avec 1 chaîne, 1000 itérations de burn-in et la conservation d'une itération sur 8, on avait 49875 itérations de faite, et le nombre effectif était plus élevé : `r round(max(ess_1_thin))`.
+
+## Question 4
+
+```{r}
+resm <- summary(modele1_fit_mult_mcmc)[[1]] %>% as.data.frame()
+resq <- summary(modele1_fit_mult_mcmc)[[2]] %>% as.data.frame()
+ic <- paste0(round(resm[["Mean"]][1], 2), "[", round(resq[["2.5%"]][1], 2), ";", round(resq[["97.5%"]][1], 2), "]")
+```
+
+L'estimation de a nous donne la moyenne et l'intervalle de crédibilité à 95% suivant : `r paste(ic)`.
+
+```{r}
+ggplot(gg_modele1_mult %>% filter(Parameter == "a") %>% mutate(Chain = paste0("Chaîne n°", Chain))) +
+  geom_rect(aes(xmin = 2.86, xmax = 3.13, ymin = 0, ymax = 6), fill = "lightgrey", alpha = 0.2) +
+  annotate("point", x = 3, y = 3, color = "#FF0000", shape = 18, size = 3, alpha = 1) +
+  geom_density(aes(x = value, color = as.factor(Chain), fill = as.factor(Chain)), alpha = 0.3) +
+  scale_color_discrete(name = NULL) +
+  scale_fill_discrete(name = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+  labs(x = "a",
+       y = "Densité")
+```
+
+On peut représenter les lois de Poisson associées à ces différents paramètres a.
+
+```{r}
+poisson_dens <- tibble(
+  x = 0:60,
+  poiss_min = (exp(2.86) ^ x) * (exp(-exp(2.86)) / factorial(x)),
+  poiss_moy = (exp(3) ^ x) * (exp(-exp(3)) / factorial(x)),
+  poiss_max = (exp(3.13) ^ x) * (exp(-exp(3.13)) / factorial(x))
+)
+dens_poiss <- ggplot(poisson_dens %>% pivot_longer(-x) %>% 
+         mutate(name = factor(name, levels = c("poiss_min", "poiss_moy", "poiss_max"),
+                              labels = c("a minimum", "a moyen", "a maximum")))) +
+  geom_col(aes(x = x, y = value, fill = name), position = position_dodge()) +
+  scale_fill_discrete(name = "Paramètre a = log(&lambda;)") +
+  labs(x = "Nombre de pannes",
+       y = "P(Z=x)",
+       title = "Lois de Poisson") +
+  theme(legend.title = element_markdown()) +
+  xlim(c(0, 60))
+dens_pannes <- ggplot(sncf_machines, aes(x = nb_pannes)) +
+  geom_bar() +
+  xlim(c(0, 60)) +
+  scale_y_continuous(breaks = 0:2) +
+  labs(x = "Nombre de pannes",
+       y = "",
+       title = "Nombre de pannes chez les machines de l'exercice")
+dens_pannes / dens_poiss
+```
+
+
 
 
 
