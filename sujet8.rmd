@@ -20,7 +20,13 @@ library(ggmcmc)
 library(ggtext)
 
 theme_set(theme_light() +
-            theme(plot.title = element_markdown()))
+            theme(plot.title = element_markdown(),
+                  strip.background = element_blank(),
+                  strip.text = element_textbox(
+                    size = 12, 
+                    color = "white", fill = "#7888C0", box.color = "#000066",
+                    halign = 0.5, linetype = 1, r = unit(3, "pt"), width = unit(0.75, "npc"),
+                    padding = margin(2, 0, 1, 0), margin = margin(3, 3, 3, 3))))
 ```
 
 # Les données
@@ -46,7 +52,6 @@ log(\lambda)=a
 \end{array}
 $$
 On a $log(\lambda)=a \Leftrightarrow \lambda=e^a$.
-
 ## Question 1
 
 $$
@@ -60,7 +65,7 @@ $$
 ## Question 2
 
 Réalisation du modèle avec JAGS :
-```{r, warning = FALSE, message = FALSE}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 # Données à présenter sous forme d'une liste
 donnees <- as.list(sncf_machines)
 # Modèle dans langage BUGS et pas en langage R
@@ -76,9 +81,7 @@ modele_1 <- function() {
 parametres_modele1 <- c("a")
 # Valeurs initiales
 inits_1 <- list("a" = 0)
-inits_2 <- list("a" = 1)
-inits_3 <- list("a" = -1)
-inits_modele1 <- list(inits_1, inits_2, inits_3)
+inits_modele1 <- list(inits_1)
 n_iter <- 50000  # Nombre d'iterations 
 n_burn <- 1000 # Burn in
 
@@ -97,9 +100,85 @@ modele1_fit_mcmc <- as.mcmc(modele1_fit)
 
 On regarde si le paramètre a estimé a bien convergé.
 
-```{r}
+```{r, fig.width = 10, fig.height = 7}
 gg_modele1 <- ggs(modele1_fit_mcmc)
 ggplot(gg_modele1 %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 0")
+```
+
+On voit que la valeur du paramètre *a* reste autour de la valeur 3 et n'a pas l'air de s'écarter beaucoup de cette valeur. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. Nous allons ensuite vérifier si les valeurs des paramètres estimés  
+
+```{r}
+ggs_autocorrelation(gg_modele1)
+```
+
+On voit que pour l'estimation de a, il y a corrélation jusqu'à la 3ème mesure. Pour la déviance, en revanche, cela va jusquà 8. Nous allons donc prendre une estimation sur 8 pour essayer de casser cette autocorrélation.
+
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
+n_thin <-  8
+# Faire tourner le modèle avec la fonction jags
+# D'abord sans thin, ni burn in
+modele1_fit_thin <- jags(data = donnees,
+                         inits = inits_modele1,
+                         parameters.to.save = parametres_modele1, 
+                         n.chains = length(inits_modele1),
+                         n.iter = n_iter * n_thin, 
+                         n.burnin = n_burn, 
+                         n.thin = n_thin,
+                         model.file = modele_1) 
+modele1_fit_thin_mcmc <- as.mcmc(modele1_fit_thin)
+```
+
+```{r, fig.width = 10, fig.height = 7}
+gg_modele1_thin <- ggs(modele1_fit_thin_mcmc)
+ggplot(gg_modele1_thin %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 0 ; Prise d'une valeur sur 8")
+```
+
+En ne prenant qu'une observation sur 8, on voit que le traceplot reste similaire avec une bonne convergence de l'estimation de a autour de 3 après le retrait de 1000 observations de burn in.
+
+```{r}
+ggs_autocorrelation(gg_modele1_thin)
+```
+
+Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance a été réglé et que maintenant il n'y a plus d'auto-corrélation pour le paramètre a estimer.
+
+Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié a à -5, 0 et 5 et regardé comment se comportait le modèle.
+
+```{r}
+inits_2 <- list("a" = 5)
+inits_3 <- list("a" = -5)
+inits_modele1_mult <- list(inits_1, inits_2, inits_3)
+modele1_fit_mult <- jags(data = donnees,
+                         inits = inits_modele1_mult,
+                         parameters.to.save = parametres_modele1, 
+                         n.chains = length(inits_modele1_mult),
+                         n.iter = n_iter * n_thin, 
+                         n.burnin = n_burn, 
+                         n.thin = n_thin,
+                         model.file = modele_1) 
+modele1_fit_mult_mcmc <- as.mcmc(modele1_fit_mult)
+gg_modele1_mult <- ggs(modele1_fit_mult_mcmc)
+```
+
+```{r}
+ggs_autocorrelation(gg_modele1_mult) +
+  facet_grid(Chain ~ Parameter)
+```
+
+```{r}
+ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
   geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
   geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
   scale_x_continuous(labels = scales::comma_format()) +
@@ -114,3 +193,188 @@ ggplot(gg_modele1 %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
 
 
 
+
+
+
+# Modèle 2 
+
+## Question 1 : 
+Donner $E(yi|a0,b0,xi)$ d'après ce modèle en fonction de a0, b0 et de xi ? Si b0=0, que cela signifie-t-il ? Même question si b0 est supérieur à 0 ou si b0 est inférieur à 0 ? 
+
+Si b = 0 cela signifie que nous sommes dans le modèle 1 avec $E(y_i|a) = e^a$ et que le nombre de panne ne dépend pas du temps.
+Si b est supérieur ou inférieur à 0 cela que $E(y_i|a) = e^{a+bx}$ et que le nombre de panne augmente avec le vieilliesment de la machine si B > 0 et diminue si B < 0
+
+## Question 2 :
+Mettre en place ce modèle avec, comme loi a priori sur a0 et b0 , une loi normale d'espérance nulle et de variance 1000. Faire 30000 itérations et enlever 1000 itérations pour le temps de chauffe. D'après l'history et les autocorrélations, voyez-vous un problème de mélangeance de l'algorithme ? Si oui, mettre un thin à 10. Cela a-t-il amélioré la mélangeance ? On considèrera que c'est suffisant. 
+
+```{r}
+modele_2 <- function(){
+  for (i in 1:length(nb_pannes)) {
+    nb_pannes[i]~dpois(lam[i])
+    log(lam[i]) = a+b_x*anciennete[i]
+  }
+  a ~ dnorm(0,1.0E-3) 
+  b_x ~ dnorm(0,1.0E-3) 
+}
+
+# paramètres
+parametres_modele2 <- c("a","b_x")
+
+# Inits
+inits2<- list("a"=3, "b_x"= 1)
+inits_modele2<-list(inits2)
+
+#nbre d'iterations
+
+n_burn2 = 1000 # burn-in
+n_iter2 = 30000 #nbre total d'iterations
+n_thin2 = 1 #thin
+
+modele2_fit <-jags(
+  data = donnees,
+  inits = inits_modele2,
+  parameters.to.save = parametres_modele2,
+  n.chains = 1,
+  n.iter = n_iter2,
+  n.burnin = n_burn2,
+  n.thin =n_thin2,
+  model.file = modele_2)
+modele2_fit_mcmc <- as.mcmc(modele2_fit)
+
+```
+
+On regarde si le paramètre a estimé a bien convergé.
+
+```{r, fig.width = 10, fig.height = 7}
+gg_modele2_a <- ggs(modele2_fit_mcmc)
+ggplot(gg_modele2 %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 0")
+
+gg_modele2_b <- ggs(modele2_fit_mcmc)
+ggplot(gg_modele2 %>% filter(Parameter == "b_x"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 0")
+```
+On voit que les valeurs des paramètres *a* *b_x* restent respectivement autour de la valeur 1 et 0.2 *b_x* et n'ont pas l'air de s'écarter beaucoup de cette valeur. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. Nous allons ensuite vérifier si les valeurs des paramètres estimés n'ont pas d'auto-corrélation.
+
+```{r}
+ggs_autocorrelation(gg_modele2_a)
+
+```
+
+On voit que pour l'estimation de a et b_x, il y a corrélation jusqu'à la 20ème mesure. Pour la déviance, en revanche, cela va jusquà 10. Nous allons donc prendre une estimation sur 10 pour essayer de casser cette autocorrélation en augmentant le nombre d'intération de 10 fois pour ne pas perdre le nombre d'itérations effectives.
+
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
+n_thin2.1 <-  10
+# Faire tourner le modèle avec la fonction jags
+# D'abord sans thin, ni burn in
+modele2_fit_thin <- jags(data = donnees,
+                         inits = inits_modele2,
+                         parameters.to.save = parametres_modele2, 
+                         n.chains = length(inits_modele2),
+                         n.iter = n_iter2 * n_thin2.1, 
+                         n.burnin = n_burn2, 
+                         n.thin = n_thin2.1,
+                         model.file = modele_2) 
+modele2_fit_thin_mcmc <- as.mcmc(modele2_fit_thin)
+```
+
+```{r, fig.width = 10, fig.height = 7}
+gg_modele2_thin <- ggs(modele2_fit_thin_mcmc)
+ggplot(gg_modele2_thin %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 0 ; Prise d'une valeur sur 8")
+
+ggplot(gg_modele2_thin %>% filter(Parameter == "b_x"), aes(x = Iteration, y = value)) +
+  geom_line() +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC",
+       subtitle = "Initialisation de a à 0 ; Prise d'une valeur sur 8")
+```
+
+En ne prenant qu'une observation sur 10, on voit que le traceplot reste similaire avec une bonne convergence de l'estimation de a autour des même valeurs après le retrait de 1000 observations de burn in.
+
+```{r}
+ggs_autocorrelation(gg_modele2_thin)
+```
+
+Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance a été réglé et que maintenant il n'y a plus d'auto-corrélation pour les paramètre a estimer.
+
+Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié a à -5, 0 et 5 et regardé comment se comportait le modèle.
+
+```{r}
+inits_2 <- list("a" = 5)
+inits_3 <- list("a" = -5)
+inits_modele1_mult <- list(inits_1, inits_2, inits_3)
+modele1_fit_mult <- jags(data = donnees,
+                         inits = inits_modele1_mult,
+                         parameters.to.save = parametres_modele1, 
+                         n.chains = length(inits_modele1_mult),
+                         n.iter = n_iter * n_thin, 
+                         n.burnin = n_burn, 
+                         n.thin = n_thin,
+                         model.file = modele_1) 
+modele1_fit_mult_mcmc <- as.mcmc(modele1_fit_mult)
+gg_modele1_mult <- ggs(modele1_fit_mult_mcmc)
+```
+
+```{r}
+ggs_autocorrelation(gg_modele1_mult) +
+  facet_grid(Chain ~ Parameter)
+```
+
+```{r}
+ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
+  geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC avec 3 chaînes") +
+  theme(legend.position = "none")
+```
+
+
+## Question 3 :
+## Question 4 :
+## Question 5 : 
+
+
+
+
+````{r}
+
+
+# graph du mod poisson
+res = summary(bayes.mod.fit.mcmc)
+resmoy = as.data.frame(res[[1]])
+resq = as.data.frame(res[[2]])
+
+densityplot(bayes.mod.fit.mcmc[,1:2], layout=c(2,1), aspect = "fill")
+t=1:10
+
+lambda = exp(resmoy$Mean[1])
+
+aaq2.5 = resq$'2.5%'[1]
+lambdainf = exp(aaq2.5)
+
+aaq97.5 = resq$'97.5%'[1]
+thetasup = exp(aaq97.5)
+````
