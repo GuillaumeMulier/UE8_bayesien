@@ -159,7 +159,7 @@ Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance 
 
 Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié a à -5, 0 et 5 et regardé comment se comportait le modèle.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 inits_2 <- list("a" = 5)
 inits_3 <- list("a" = -5)
 inits_modele1_mult <- list(inits_1, inits_2, inits_3)
@@ -204,7 +204,7 @@ effectiveSize(modele1_fit_thin)
 Donnez la moyenne a posteriori et l'intervalle de crédibilité à 95% de a. 
 
 La moyenne à posteriori du *a* est de 3.00 avec un intervalle de crédibilité à 95% à [2.86;3.13]
-````{r}
+````{r, warning = FALSE, message = FALSE, result = 'hide'}
 
 res1 = summary(modele1_fit_thin_mcmc)
 resmoy1 = as.data.frame(res1[[1]])
@@ -221,7 +221,7 @@ Que vaut le DIC ? Que vaut l'estimation de la complexité du modèle ? Vous semb
 
 Le DIC vaut 253 et l'estimation de la complexité du modèle 1 (pD). cela est cohérent puisque nous n'avions qu'un seul paramètre *a*.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 print(modele1_fit_thin)
 
 ```
@@ -239,7 +239,7 @@ La moyenne de *a* est quasiment identique à  2.998186 contre 2.997857 pour le m
 
 La modification de la loi à priori n'a quasiment pas modifié les résultats obtenus. Nous pouvons donc considéré que la première loi à une variance suffisante pour être considérée comme non informative.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 modele_1bis <- function() {
   # Modèle pour yi
   for (i in 1:10) {
@@ -304,7 +304,7 @@ Si b est supérieur ou inférieur à 0 cela que $E(y_i|a) = e^{a+bx}$ et que le 
 ## Question 2 :
 Mettre en place ce modèle avec, comme loi a priori sur a0 et b0 , une loi normale d'espérance nulle et de variance 1000. Faire 30000 itérations et enlever 1000 itérations pour le temps de chauffe. D'après l'history et les autocorrélations, voyez-vous un problème de mélangeance de l'algorithme ? Si oui, mettre un thin à 10. Cela a-t-il amélioré la mélangeance ? On considèrera que c'est suffisant. 
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 modele_2 <- function(){
   for (i in 1:length(nb_pannes)) {
     nb_pannes[i]~dpois(lam[i])
@@ -414,7 +414,7 @@ Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance 
 
 Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié *a* à -5, -3 et 0, *b0* a 5, -5 et 0 et regardé comment se comportait le modèle.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 inits_2.1 <- list("a"=5, "b0"=5)
 inits_2.2 <- list("a"=-3, "b0"=-5)
 inits_2.3 <- list("a"=0, "b0"=0)
@@ -464,7 +464,7 @@ Que vaut le nombre d’itérations pour les calculs ? Que vaut le nombre d’it�
 Le nombre d'itérations pour notre calcul est de 300 000 mais nous avons mis un thin de 10, le nombre d'itéartions effectif est de 26551.18 pour le paramètre *a* et de 27173.10 pour le paramètre *b0*. Cela représente le nombre d'itérations qui ont apportées de l'information utile à notre modèle.
 
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 print(modele2_fit_thin)
 effectiveSize(modele2_fit_thin)
 
@@ -475,7 +475,7 @@ Si ce n’est pas le cas, refaire tourner votre modèle pour que le nombre effec
 
 Nous avions anticipé la diminution du nombre d'itérations "effectif" avec l'augmentationn du thin. Nous sommes donc au supérieur à 10 000 itération effectives. Cependant pour atteindre ce chiffre nous pouvons diminuer notre nombre total d'itéartions. Le nombre d'itération nécessaire pour atteindre 10 000 itération effectives avoisine 120 000.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 modele2_fit_thinopti <- jags(data = donnees,
                          inits = inits_modele2,
                          parameters.to.save = parametres_modele2, 
@@ -496,7 +496,7 @@ La moyenne de a0 est de 0.94, son intervalle de crédibilité à 95% est de [0.4
 La moyenne de b0 est de 0.21, son intervalle de crédibilité à 95% est de [0.17-1.24]
 
 
-````{r}
+````{r, warning = FALSE, message = FALSE, result = 'hide'}
 
 res = summary(modele2_fit_thin_mcmc)
 resmoy = as.data.frame(res[[1]])
@@ -528,7 +528,7 @@ exp(b0), qui vaut 1.2, représente le sur-risque par année passée de développ
 Que vaut le DIC ? Que vaut l'estimation de la complexité du modèle ? Vous semble-t-elle logique ?
 
 Le DIC du modèle vaut 69.4 et l'estimation de la complexité du modèle (pD) vaut 2.0. Cela est cohérent puisque nous avions 2 paramètres dans notre modèle (a et b0).  
-```{r}
+```{r, warning = FALSE, message = FALSE, result = 'hide'}
 print(modele2_fit_thin)
 print(modele1_fit_thin)
 
@@ -537,4 +537,4 @@ print(modele1_fit_thin)
 ## Question 8 :
 D'après le DIC, quel modèle choisissez-vous entre M1 et M2 ? 
 
-En relevant les DIC de nos deux modèles, nous choissons le modèle M2. Ce dernier à un DIC nettement inférieur à celui du modèle 1, 69.4 contre  XXX. L'apporte de la variable x(temps) est donc associé une meilleur estimation du modèle.
+En relevant les DIC de nos deux modèles, nous choissons le modèle M2. Ce dernier à un DIC nettement inférieur à celui du modèle 1, 69.4 contre  253. L'apporte de la variable x(temps) est donc associé une meilleur estimation du modèle.
