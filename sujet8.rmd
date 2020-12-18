@@ -425,3 +425,25 @@ Nous avons également représenté le densityplot de chaque variable
 ```{r}
 densityplot(modele2_fit_thin_mcmc[,1:2], layout=c(2,1), aspect = "fill")
 ```
+
+## Question 6 :
+Pensez-vous que la variable x doit être prise en compte ? Donnez rapidement une interprétation du résultat (par exemple, pour deux machines ayant une différence d'ancienneté de 1 an, que représente exp(b0) ?).
+
+La variable x doit être prise en compte car elle approte de l'information à notre modèle. En effet, l'ancienneté est associé à un sur-risque, significatif à 95%, de panne comme en témoigne le moyenne de b0 et son intervalle de confiance à 95% qui ne recouvre pas 0.
+
+exp(b0), qui vaut 1.2, représente le sur-risque par année passée de développer une panne. En d'autres termes, chaque année, le nombre risque de développer une panne augemente de 1.2.
+
+## Question 7 :
+Que vaut le DIC ? Que vaut l'estimation de la complexité du modèle ? Vous semble-t-elle logique ?
+
+Le DIC du modèle vaut 69.4 et l'estimation de la complexité du modèle (pD) vaut 2.0. Cela est cohérent puisque nous avions 2 paramètres dans notre modèle (a et b0).  
+```{r}
+print(modele2_fit_thin)
+print(modele1_fit_thin)
+
+```
+
+## Question 8 :
+D'après le DIC, quel modèle choisissez-vous entre M1 et M2 ? 
+
+En relevant les DIC de nos deux modèles, nous choissons le modèle M2. Ce dernier à un DIC nettement inférieur à celui du modèle 1, 69.4 contre  XXX. L'apporte de la variable x(temps) est donc associé une meilleur estimation du modèle.
