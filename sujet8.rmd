@@ -320,28 +320,39 @@ Sur le graphique d'auto-corrélations, on voit que le problème de mélangeance 
 Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié a à -5, 0 et 5 et regardé comment se comportait le modèle.
 
 ```{r}
-inits_2 <- list("a" = 5)
-inits_3 <- list("a" = -5)
-inits_modele1_mult <- list(inits_1, inits_2, inits_3)
-modele1_fit_mult <- jags(data = donnees,
-                         inits = inits_modele1_mult,
-                         parameters.to.save = parametres_modele1, 
+inits_2.1 <- list("a"=5, "b_x"=5)
+inits_2.2 <- list("a"=-3, "b_x"=-5)
+inits_2.3 <- list("a"=0, "b_x"=0)
+
+inits_modele2_mult <- list(inits_2.1, inits_2.2, inits_2.3)
+modele2_fit_mult <- jags(data = donnees,
+                         inits = inits_modele2_mult,
+                         parameters.to.save = parametres_modele2, 
                          n.chains = length(inits_modele1_mult),
-                         n.iter = n_iter * n_thin, 
-                         n.burnin = n_burn, 
-                         n.thin = n_thin,
-                         model.file = modele_1) 
-modele1_fit_mult_mcmc <- as.mcmc(modele1_fit_mult)
-gg_modele1_mult <- ggs(modele1_fit_mult_mcmc)
+                         n.iter = n_iter2 * n_thin2.1, 
+                         n.burnin = n_burn2, 
+                         n.thin = n_thin2.1,
+                         model.file = modele_2) 
+modele2_fit_mult_mcmc <- as.mcmc(modele2_fit_mult)
+gg_modele2_mult <- ggs(modele2_fit_mult_mcmc)
 ```
 
 ```{r}
-ggs_autocorrelation(gg_modele1_mult) +
+ggs_autocorrelation(gg_modele2_mult) +
   facet_grid(Chain ~ Parameter)
 ```
 
 ```{r}
-ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+ggplot(gg_modele2_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
+  geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
+  geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
+  scale_x_continuous(labels = scales::comma_format()) +
+  labs(x = "Itération",
+       y = "a",
+       title = "Traceplot de l'estimation de a par MCMC avec 3 chaînes") +
+  theme(legend.position = "none")
+
+ggplot(gg_modele2_mult %>% filter(Parameter == "b_x"), aes(x = Iteration, y = value)) +
   geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
   geom_vline(xintercept = 1000, color = "purple", linetype = "dotted") +
   scale_x_continuous(labels = scales::comma_format()) +
@@ -360,7 +371,7 @@ ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = valu
 
 
 ````{r}
-
+## Code A revoir - avec interprétation
 
 # graph du mod poisson
 res = summary(bayes.mod.fit.mcmc)
