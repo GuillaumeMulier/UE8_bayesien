@@ -843,6 +843,214 @@ Pour estimer la complexité du modèle, le pD est estimé et représente le nomb
 
 En relevant les DIC de nos deux modèles, nous choissons le modèle M2. Ce dernier à un DIC nettement inférieur à celui du modèle 1, 69.4 contre  253. L'apport de la variable x (ancienneté de la machine) est donc associée une meilleur estimation du modèle. Le DIC vient apporter un argument de plus dans l'utilité d'ajouter l'ancienneté de la machine dans le modèle discutée dans la question 6 vis-à-vis du coefficient $b_0$.
 
+# Modèle 3
+
+Le modèle est le suivant :
+$$
+\begin{array}{l}
+y_i\sim\mathcal{P}ois(\lambda_i)\\
+avec\left\{\begin{array}{l}
+y_i\quad le\quad nombre\quad de\quad pannes\quad de\quad la\quad machine\quad i\\
+log(\lambda_i)=a_0+b_0\times x_i+\varepsilon_i\\
+x_i\quad l'ancienneté\quad de\quad la\quad machine\quad i\\
+\varepsilon_i\sim\mathcal{N}(0, \sigma^2)
+\end{array}\right.
+\end{array}
+$$
+
+## Question 1
+
+**Selon vous, quel est l’intérêt de l’ajout de la composante aléatoire $\varepsilon_i$ ?**
+
+La composante aléatoire $\varepsilon_i$ représente un "bruit" autour de la valeur de la moyenne de la machine i. En faisant cela, on ajoute l'information que 2 machines de même ancienneté sont différentes les unes des autres indépendamment de leur caractéristiques. Cette part d'aléatoire représente la part de variabilité inter-individuelle. Si on ne l'ajoute pas, nous pensons que cela surestime la corrélation entre le nombre de pannes par an et l'ancienneté de la machine, à la manière de l'imputation par régression dans le problème de l'imputation de données manquantes.
+
+## Question 2
+
+**Mettre en place ce modèle avec, comme loi a priori sur a0 et b0 , une loi normale d'espérance nulle et de variance 1000 et sur $\tau=\frac {1}{\sigma^2}$ une loi gamma de paramètres 0.01 et 0.01. Faire 30000 itérations et enlever 1000 itérations pour le temps de chauffe. D'après l'history et les autocorrélations, voyez-vous un problème de mélangeance de l'algorithme ? Si oui, mettre un thin à 10. Cela a-t-il amélioré la mélangeance ? Si non, rajoutez des itérations et augmentez le thin afin d’avoir des résultats raisonnables.**
+
+```{r, warning = FALSE, message = FALSE, results = 'hide'}
+modele_3 <- function() {
+  for (i in 1:length(nb_pannes)) {
+    epsilon[i] ~ dnorm(0, tau)
+    lam[i] <- exp(a0 + b0 * anciennete[i] + epsilon[i])
+    nb_pannes[i] ~ dpois(lam[i])
+  }
+  a0 ~ dnorm(0, 1.0E-3) 
+  b0 ~ dnorm(0, 1.0E-3) 
+  tau ~ dgamma(0.01, 0.01)
+}
+
+# Paramètres
+parametres_modele3 <- c("a0", "b0", "tau")
+
+# Inits
+inits3 <- list("a0" = 1, "b0" = 1, "tau" = 1)
+inits_modele3 <- list(inits3)
+
+# Nombre d'iterations
+n_burn3 <- 1000 
+n_iter3 <- 300000 
+n_thin3 <- 1
+
+# Modélisation
+set.seed(1993)
+modele3_fit <-jags(
+  data = donnees,
+  inits = inits_modele3,
+  parameters.to.save = parametres_modele3,
+  n.chains = length(inits_modele3),
+  n.iter = n_iter3,
+  n.burnin = n_burn3,
+  n.thin = n_thin3,
+  model.file = modele_3)
+modele3_fit_mcmc <- as.mcmc(modele3_fit)
+gg_modele3 <- ggs(modele3_fit_mcmc)
+ess_3 <- effectiveSize(modele3_fit_mcmc)
+```
+
+Nous allons regarder la convergence des différents paramètres estimés.
+
+```{r, fig.width = 8, fig.height = 12}
+vec_par <- c("a0", "b0", "tau")
+vec_nom <- c("a<sub>0</sub>", "b<sub>0</sub>", "&sigma;<sup>2</sup>")
+for (i in vec_par) {
+  assign(x = paste0("plot_", i),
+         value = ggplot(gg_modele3 %>% 
+                          filter(Parameter == i) %>% 
+                          mutate(value = ifelse(Parameter == "tau", 1 / value, value)),
+                        aes(x = Iteration, y = value)) +
+           geom_line() +
+           scale_x_continuous(labels = scales::comma_format(), lim = c(0, 31000)) +
+           labs(x = "Itération",
+                y = paste0(vec_nom[match(i, vec_par)]),
+                title = paste0("Traceplot de l'estimation de ", vec_nom[match(i, vec_par)], " par MCMC"),
+                subtitle = paste0("Initialisation de ", vec_nom[match(i, vec_par)], " à 1")) +
+           theme(plot.title = element_markdown()))
+}
+plot_a0 / plot_b0 / plot_tau
+```
+
+Au niveau des traceplot, les valeurs de $a_0$ et $b_0$ tournent autour d'une valeur : un peu moins de 1 pour $a_0$ et 0.2 pour $b_0$. Il y a un peu plus de variations que pour les modèles 1 et 2, mais cela ne s'écarte pas trop. En revanche, pour $\sigma^2$, beaucoup de valeurs sont plus dispersées.
+
+```{r}
+ggs_autocorrelation(gg_modele3 %>% 
+                      mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
+                                                   Parameter == "b0" ~ "b<sub>0</sub>",
+                                                   Parameter == "tau" ~ "&tau;",
+                                                   TRUE ~ as.character(Parameter))))
+```
+
+On voit, sur le graphique des auto-corrélation qu'on a des auto-corrélations importantes, ce qui est confirmé par l'effective sample size qui est autour de 5000 pour les 3 paramètres estimés (`r paste(round(ess_3[-3]), collapse = "/")`), ce qui est bien inférieur aux `r round(modele3_fit$BUGSoutput$n.sims)` itérations réellement faites. Nous allons donc mettre un thin à 10 afin d'essayer de casser ces auto-corrélations, tout en augmentant le nombre total d'itérations, en espérant que la variabilité d'estimation des paramètres sera réduite.
+
+```{r}
+n_iter3 <- 40000
+n_thin3 <- 20
+set.seed(1993)
+modele3_fit_thin <-jags(
+  data = donnees,
+  inits = inits_modele3,
+  parameters.to.save = parametres_modele3,
+  n.chains = length(inits_modele3),
+  n.iter = n_iter3 * n_thin3,
+  n.burnin = n_burn3,
+  n.thin = n_thin3,
+  model.file = modele_3)
+modele3_fit_thin_mcmc <- as.mcmc(modele3_fit_thin)
+gg_modele3_thin <- ggs(modele3_fit_thin_mcmc)
+ess_3_thin <- effectiveSize(modele3_fit_thin_mcmc)
+```
+
+```{r, fig.width = 8, fig.height = 12}
+vec_par <- c("a0", "b0", "tau")
+vec_nom <- c("a<sub>0</sub>", "b<sub>0</sub>", "&sigma;<sup>2</sup>")
+for (i in vec_par) {
+  assign(x = paste0("plot_", i),
+         value = ggplot(gg_modele3_thin %>% 
+                          filter(Parameter == i) %>% 
+                          mutate(value = ifelse(Parameter == "tau", 1 / value, value)),
+                        aes(x = Iteration, y = value)) +
+           geom_line() +
+           scale_x_continuous(labels = scales::comma_format()) +
+           labs(x = "Itération",
+                y = paste0(vec_nom[match(i, vec_par)]),
+                title = paste0("Traceplot de l'estimation de ", vec_nom[match(i, vec_par)], " par MCMC"),
+                subtitle = paste0("Initialisation de ", vec_nom[match(i, vec_par)], " à 1")) +
+           theme(plot.title = element_markdown()))
+}
+plot_a0 / plot_b0 / plot_tau
+```
+
+```{r}
+ggs_autocorrelation(gg_modele3_thin %>% 
+                      mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
+                                                   Parameter == "b0" ~ "b<sub>0</sub>",
+                                                   Parameter == "tau" ~ "&tau;",
+                                                   TRUE ~ as.character(Parameter))))
+```
+
+```{r}
+grille <- expand.grid(a0 = c(5, 0, -5), b0 = c(5, 0, -5), tau =c(0.05, 0.5, 1, 2)) %>% 
+  as.data.frame()
+inits_modele3_mult <- list()
+for (i in seq_len(nrow(grille))) {
+  inits_modele3_mult[[i]] <- list(a0 = grille[i, "a0"], b0 = grille[i, "b0"], tau = grille[i, "tau"])
+}
+set.seed(1993)
+modele3_fit_thin <-jags(
+  data = donnees,
+  inits = inits_modele3_mult,
+  parameters.to.save = parametres_modele3,
+  n.chains = length(inits_modele3_mult),
+  n.iter = n_iter3 * n_thin3,
+  n.burnin = n_burn3,
+  n.thin = n_thin3,
+  model.file = modele_3)
+save(modele3_fit_thin,
+     file = "modele3_thin.Rdata")
+modele3_fit_thin_mcmc <- as.mcmc(modele3_fit_thin)
+gg_modele3_thin <- ggs(modele3_fit_thin_mcmc)
+ess_3_thin <- effectiveSize(modele3_fit_thin_mcmc)
+```
+
+```{r, fig.width = 8, fig.height = 12}
+vec_par <- c("a0", "b0", "tau")
+vec_nom <- c("a<sub>0</sub>", "b<sub>0</sub>", "&sigma;<sup>2</sup>")
+for (i in vec_par) {
+  assign(x = paste0("plot_", i),
+         value = ggplot(gg_modele3_thin %>% 
+                          filter(Parameter == i) %>% 
+                          mutate(value = ifelse(Parameter == "tau", 1 / value, value)),
+                        aes(x = Iteration, y = value, color = as.factor(Chain))) +
+           geom_line(show.legend = FALSE, alpha = 0.3) +
+           scale_x_continuous(labels = scales::comma_format()) +
+           labs(x = "Itération",
+                y = paste0(vec_nom[match(i, vec_par)]),
+                title = paste0("Traceplot de l'estimation de ", vec_nom[match(i, vec_par)], " par MCMC avec 36 chaînes")) +
+           theme(plot.title = element_markdown()))
+}
+plot_abt <- plot_a0 / plot_b0 / plot_tau
+save(plot_a0, plot_b0, plot_tau, plot_abt,
+     file = "donnee_graphiques.Rdata")
+ggsave(filename = "plot_abt_36c.png",
+       plot = plot_abt,
+       device = "png",
+       width = 8,
+       height = 12)
+```
+
+```{r}
+ggs_autocorrelation(gg_modele3_thin %>% 
+                      mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
+                                                   Parameter == "b0" ~ "b<sub>0</sub>",
+                                                   Parameter == "tau" ~ "&tau;",
+                                                   TRUE ~ as.character(Parameter))))
+```
+
+
+
+
+
+
 
 
 
