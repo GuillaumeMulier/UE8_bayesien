@@ -21,6 +21,7 @@ library(ggtext)
 library(broom.mixed)
 library(flextable)
 library(patchwork)
+library(knitr)
 library(RColorBrewer)
 
 theme_set(theme_light() +
@@ -130,13 +131,13 @@ ggplot(gg_modele1 %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
        caption = "Itérations totales = 30000 / Burn-in = 1000 / Thin = 1")
 ```
 
-On voit que la valeur du paramètre *a* reste autour de la valeur 3 et n'a pas l'air de s'écarter beaucoup de cette valeur. De plus, le burn-in de 1000 semble suffisant car le début de la chaîne après la période de burn-in est aussi proche de 3. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. Nous allons ensuite vérifier si les maillons de la chaîne sont bien indépendants les uns des autres.
+On voit que la valeur du paramètre $a$ reste autour de la valeur 3 et n'a pas l'air de s'écarter beaucoup de cette valeur. De plus, le burn-in de 1000 semble suffisant car le début de la chaîne après la période de burn-in est aussi proche de 3. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. Nous allons ensuite vérifier si les maillons de la chaîne sont bien indépendants les uns des autres.
 
-```{r}
+```{r, fig.width = 8, fig.height = 6}
 ggs_autocorrelation(gg_modele1)
 ```
 
-On voit que pour l'estimation de a, il y a corrélation jusqu'à la 3ème mesure. Pour la déviance, en revanche, cela va jusquà 8. Cela est confirmé par le nombre d'itérations effectives qui est franchement diminué par rapport aux 30000 itérations faites : `r round(ess_1["a"])` pour l'estimation de a et `r round(ess_1["deviance"])` pour l'estimation de la déviance du modèle.
+On voit que pour l'estimation de $a$, il y a corrélation jusqu'à la 3ème mesure. Pour la déviance, en revanche, cela va jusquà 5. Cela est confirmé par le nombre d'itérations effectives qui est franchement diminué par rapport aux `r modele1_fit$BUGSoutput$n.sims` itérations faites : `r round(ess_1["a"])` pour l'estimation de a et `r round(ess_1["deviance"])` pour l'estimation de la déviance du modèle.
 
 Nous allons donc prendre un décallage de 8 pour essayer de casser cette autocorrélation. De plus, nous conserverons un burn-in de 1000 observations pour éviter de prendre des itérations qui n'ont pas encore convergé. Aussi, afin de conserver le nombre d'itérations conservées, nous multiplierons aussi par 8 le nombre total d'itération avant sélection des 1/8.
 
@@ -183,11 +184,11 @@ ggplot(gg_modele1_thin %>% filter(Parameter == "a"), aes(x = Iteration, y = valu
 
 En ne prenant qu'une observation sur 8, on voit que le traceplot reste similaire avec une bonne convergence de l'estimation de a autour de 3 après le retrait de 1000 observations de burn in.
 
-```{r}
+```{r, fig.width = 8, fig.height = 6}
 ggs_autocorrelation(gg_modele1_thin)
 ```
 
-Sur le graphique d'auto-corrélations, on voit que le problème a été réglé et que maintenant il n'y a plus d'auto-corrélation pour le paramètre a estimé. De plus, le nombre d'itérations effectives est maintenant autour des 29875 itérations faites : `r round(ess_1_thin["a"])` pour l'estimation de a et `r round(ess_1_thin["deviance"])` pour l'estimation de la déviance du modèle.
+Sur le graphique d'auto-corrélations, on voit que le problème a été réglé et que maintenant il n'y a plus d'auto-corrélation pour le paramètre a estimé. De plus, le nombre d'itérations effectives est maintenant de `r modele1_fit_thin$BUGSoutput$n.sims` itérations : `r round(ess_1_thin["a"])` pour l'estimation de a et `r round(ess_1_thin["deviance"])` pour l'estimation de la déviance du modèle.
 
 Afin de nous assurer de la convergence du modèle, nous avons réalisé 3 chaînes avec des départ pour des valeurs différentes. Nous avons initié a à -5, 0 et 5 et regardé comment se comportait le modèle.
 
@@ -209,16 +210,16 @@ gg_modele1_mult <- ggs(modele1_fit_mult_mcmc)
 ess_1_mult <- effectiveSize(modele1_fit_mult)
 ```
 
-```{r}
+```{r, fig.width = 8, fig.height = 6}
 ggs_autocorrelation(gg_modele1_mult %>% mutate(Chain = paste0("Chaîne n°", Chain))) +
   facet_wrap(~ Chain + Parameter, ncol = 3, dir = "v") +
   theme(legend.position = "none") +
   labs(caption = "Itérations totales = 240000 par chaîne / Burn-in = 1000 / Thin = 8 / 3 chaînes")
 ```
 
-Pour les 3 chaînes, on ne voit pas d'auto-corrélation dans notre modèle. Aussi, le nombre d'itérations effectives est resté autour des 89625 itérations faites : `r round(ess_1_mult["a"])` pour l'estimation de a et `r round(ess_1_mult["deviance"])` pour l'estimation de la déviance du modèle (à noter que pour la déviance, l'effective sample size dépasse le nombre d'itérations réellement faites. Cela est peut-être du à des auto-corrélation négatives, mais nous considérerons que cela signifie que nos estimations sont bien indépendantes les unes des autres).
+Pour les 3 chaînes, on ne voit pas d'auto-corrélation dans notre modèle. Aussi, le nombre d'itérations effectives est resté autour des `r modele1_fit_mult$BUGSoutput$n.sims` itérations faites : `r round(ess_1_mult["a"])` pour l'estimation de a et `r round(ess_1_mult["deviance"])` pour l'estimation de la déviance du modèle (à noter que l'effective sample size égale ici le nombre d'itérations réellement faites. Cela est peut-être du à l'indépendantes des itérations les unes des autres).
 
-```{r}
+```{r, fig.width = 8, fig.height = 10}
 plot1 <- ggplot(gg_modele1_mult %>% filter(Parameter == "a"), aes(x = Iteration, y = value)) +
   geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
   scale_x_continuous(labels = scales::comma_format()) +
@@ -238,7 +239,7 @@ plot1 / plot2
 
 On peut voir que les 3 chaînes convergent bien vers la même valeur pour 3 initialisations différentes du paramètre a. Cela se voit sur le traceplot qui montre que les estimations de a restent autour de la même valeur, mais aussi sur le graphique des densités de a pour chaque chaîne qui montre des densités superposables pour les 3 chaînes.
 
-```{r, message = FALSE, warning = FALSE}
+```{r, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 10}
 gelman <- ggs_Rhat(gg_modele1_mult) +
   labs(y = "Paramètre")
 geweke <- ggs_geweke(gg_modele1_mult) +
@@ -287,7 +288,7 @@ ic <- paste0(round(resm[["Mean"]][1], 2), "[", round(resq[["2.5%"]][1], 2), ";",
 
 L'estimation de a nous donne la moyenne et l'intervalle de crédibilité à 95% suivant : `r paste(ic)`. Nous avons représenté la densité à postériori de $a$ sur le graphique suivant. Nous avons aussi intégré la loi à priori qui est une loi normale très plate et semble donc bien une loi non informative.
 
-```{r}
+```{r, fig.width = 6, fig.height = 5}
 ggplot(gg_modele1_thin %>% filter(Parameter == "a")) +
   geom_rect(aes(xmin = 2.86, xmax = 3.13, ymin = 0, ymax = 6), fill = "lightgrey", alpha = 0.2) +
   geom_density(aes(x = value, color = "Posterior"), fill = "red" , alpha = 0.3) +
@@ -305,7 +306,7 @@ ggplot(gg_modele1_thin %>% filter(Parameter == "a")) +
 
 On peut représenter les lois de Poisson associées à ces différents paramètres a (le a moyen représente la loi associé à la moyenne de a, a minimum et maximum représentent les a des bornes de l'intervalle de crédibilité).
 
-```{r, warning = FALSE}
+```{r, warning = FALSE, fig.height = 8, fig.with = 7}
 poisson_dens <- tibble(
   x = 0:60,
   poiss_min = (exp(2.86) ^ x) * (exp(-exp(2.86)) / factorial(x)),
@@ -345,6 +346,7 @@ complexite <- round(modele1_fit_thin$BUGSoutput$pD, 4)
 ```
 
 Le DIC du modèle vaut `r dic`.
+
 Pour estimer la complexité du modèle, le pD est estimé et représente le nombre effectif de paramètres estimés. Pour notre modèle, il vaut `r complexite`. Ce chiffre est voisin de 1, ce qui est en accord avec le modèle car nous n'estimons qu'un paramètre : $a$ qui vaut $log(\lambda)$ et est unique pour toutes les machines.
 
 ## Question 6
@@ -389,7 +391,7 @@ tidy(modele1_fit_sens) %>%
   autofit()
 ```
 
-Les résultat du modèle apparaît très similaire, avec un a moyen et son intervalle de crédibilité à 95% de `r ic_sens`.
+Les résultats du modèle apparaîssent très similaires, avec un a moyen et son intervalle de crédibilité à 95% de `r ic_sens`.
 
 Le comportement pour la mélangeance du modèle était très similaire au modèle précédant. Ainsi, on n'avait pas de problème de mélangeance dans notre modèle avec pas d'auto-corrélations et une bonne convergence.
 
@@ -523,14 +525,14 @@ plot_a0 + plot_b0
 
 On voit que les valeurs des paramètres $a_0$ et $b_0$ restent respectivement autour de la valeur 1 et 0.2 et n'ont pas l'air de s'écarter beaucoup de cette valeur. Nous vérifierons par la suite si cette convergence est conservée en augmentant le nombre de chaînes. De plus, nous avons l'impression qu'il reste un peu de non-convergence des paramètres au début et allons augmenter un peu de burn-in en conséquence. Nous allons ensuite vérifier si les valeurs des paramètres estimés n'ont pas d'auto-corrélation.
 
-```{r}
+```{r, fig.width = 8, fig.height = 6}
 ggs_autocorrelation(gg_modele2 %>% 
                       mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
                                                    Parameter == "b0" ~ "b<sub>0</sub>",
                                                    TRUE ~ as.character(Parameter))))
 ```
 
-On voit que pour l'estimation de $a_0$ et $b_0$, il y a auto-corrélation jusqu'à la 15ème mesure. Pour la déviance, en revanche, cela va jusquà 10.  De plus, le nombre d'itérations effectives est bien en-dessous du nombre d'itérations réalisées : nous avons fait 30000 itérations, et le nombre d'itérations effectives n'est que de `r round(ess_2["a0"])` pour $a_0$ et de `r round(ess_2["b0"])` pour $b_0$. Ce nombre diminué indique une grande auto-corrélation des valeurs estimées entre les itérations.
+On voit que pour l'estimation de $a_0$ et $b_0$, il y a auto-corrélation jusqu'à la 15ème mesure. Pour la déviance, en revanche, cela va jusquà 10.  De plus, le nombre d'itérations effectives est bien en-dessous du nombre d'itérations réalisées : nous avons fait `r modele2_fit$BUGSoutput$n.sims` itérations, et le nombre d'itérations effectives n'est que de `r round(ess_2["a0"])` pour $a_0$ et de `r round(ess_2["b0"])` pour $b_0$. Ce nombre diminué indique une grande auto-corrélation des valeurs estimées entre les itérations.
 
 Nous allons donc prendre une estimation sur 10 pour essayer de casser cette auto-corrélation en augmentant le nombre d'itérations en conséquence pour ne pas perdre le nombre d'itérations effectives.
 
@@ -573,24 +575,25 @@ plot_a0 + plot_b0
 
 En ne prenant qu'une observation sur 10, on voit que le traceplot reste similaire avec une bonne convergence de l'estimation de $a_0$ et de $b_0$ autour des même valeurs après le retrait de 2000 observations de burn in. On remarque aussi que le reste de non-convergence au début n'a pas été totalement réglé avec l'augmentation du burn-in, mais cela n'apparaît que sur une itération on dirait et en augmentant le burn in nous obtenons le même résultat, donc nous allons garder ce burn-in de 2000.
 
-```{r}
+```{r, fig.width = 8, fig.height = 6}
 ggs_autocorrelation(gg_modele2_thin %>% 
                       mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
                                                    Parameter == "b0" ~ "b<sub>0</sub>",
                                                    TRUE ~ as.character(Parameter))))
 ```
 
-Sur le graphique d'auto-corrélations, on voit que le problème a été amélioré. en regardant le nombre d'itérations effectives, nous pouvons remarquer que ça s'est amélioré aussi : nous avons fait 29000 itérations et le nombre d'itérations effectives est de `r round(ess_2_thin["a0"])` pour $a_0$ et de `r round(ess_2_thin["b0"])` pour $b_0$. Ces chiffres sont encore un peu en-dessous du nombre d'itérations réalisées, mais l'amélioration est conséquente. Pour un lag de 1 ($a_0$ et $b_0$), il reste un peu d'auto-corrélation, mais comme demandé dans l'énoncé, nous conserverons notre thin à 10 et considérerons que les itérations sont indépendantes les unes des autres.
+Sur le graphique d'auto-corrélations, on voit que le problème a été amélioré. en regardant le nombre d'itérations effectives, nous pouvons remarquer que ça s'est amélioré aussi : nous avons fait `r modele2_fit_thin$BUGSoutput$n.sims` itérations et le nombre d'itérations effectives est de `r round(ess_2_thin["a0"])` pour $a_0$ et de `r round(ess_2_thin["b0"])` pour $b_0$. Ces chiffres sont encore un peu en-dessous du nombre d'itérations réalisées, mais l'amélioration est conséquente. Pour un lag de 1 ($a_0$ et $b_0$), il reste un peu d'auto-corrélation, mais comme demandé dans l'énoncé, nous conserverons notre thin à 10 et considérerons que les itérations sont indépendantes les unes des autres.
 
 Les résultats de notre modèle pour les estimations de $a_0$ et $b_0$ sont les suivants :
 
 ```{r}
-tidy(modele2_fit) %>% 
-  mutate(across(estimate:std.error, ~ round(.x, 3))) %>% 
+modele2_fit_thin$BUGSoutput$summary[1:2, 1:2] %>% 
+  as.data.frame() %>% rownames_to_column() %>% 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>% 
   flextable() %>% 
-  set_header_labels(term = "Paramètre estimé", 
-                    estimate = "Estimation", 
-                    std.error = "Ecart-Type") %>% 
+  set_header_labels(rowname = "Paramètre estimé", 
+                    mean = "Estimation", 
+                    sd = "Ecart-Type") %>% 
   autofit()
 ```
 
@@ -630,7 +633,7 @@ ggs_autocorrelation(gg_modele2_mult %>%
 
 Au niveau des auto-corrélations, nous avons un résultat similaire à celui que nous avions eu avec une chaîne : cela semble satisfaisant avec peut-être un peu de corrélation pour un lag de 1. De plus, l'effective sample size reste proche du nombre d'itérations conservées : nous avons conservé `r round(modele2_fit_mult$BUGSoutput$n.sims)` itérations, et les nombres effectifs sont de `r round(ess_2_mult["a0"])` pour $a_0$ et de `r round(ess_2_mult["b0"])` pour $b_0$. Nous avons considéré que les itérations étaient donc suffisamment indépendantes les unes des autres.
 
-```{r, fig.width = 12, fig.height = 10}
+```{r, fig.width = 12, fig.height = 10, warning = FALSE}
 plot_peignea <- ggplot(gg_modele2_mult %>% filter(Parameter == "a0"), aes(x = Iteration, y = value)) +
   geom_line(aes(color = as.factor(Chain)), alpha = 0.3) +
   scale_x_continuous(labels = scales::comma_format()) +
@@ -663,7 +666,7 @@ plot_densb <- ggplot(gg_modele2_mult %>% filter(Parameter == "b0"), aes(x = valu
 
 On peut voir que les 9 chaînes convergent bien vers la même valeur pour 3 initialisation différentes du paramètre $a_0$ et du paramètre $b_0$. Cela se voit sur le traceplot qui montre que les estimations de $a_0$ restent autour de la même valeur d'environ 1 (et 0.2 pour $b_0$), mais aussi sur le graphique des densités de $a_0$ et de $b_0$ pour chaque chaîne qui montre des densités superposables pour les 9 chaînes. Il y a sur les traceplots un peu de variabilité sur les 1ère itérations, mais en augmentant le burn-in, cela n'a pas changé ce phénomène, et il n'a l'air que très localisé au début et nous ne pensons pas que cela a impacté les résultats. Nous avons aussi réalisé des diagnostics de convergence de Geweke et Gelman. Nous pouvons voir sur les représentations graphiques suivantes que le $\hat R$ de Gelman reste à 1 et que le Z-score de Geweke est compris entre -2DS et 2DS pour toutes les chaînes, signes d'une bonne convergence pour tous les paramètres du modèle.
 
-```{r, warning = FALSE, message = FALSE}
+```{r, warning = FALSE, message = FALSE, fig.width = 8, fig.height = 6}
 gelman <- ggs_Rhat(gg_modele2_mult %>% mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
                                                    Parameter == "b0" ~ "b<sub>0</sub>",
                                                    TRUE ~ as.character(Parameter)))) +
@@ -678,19 +681,21 @@ geweke <- ggs_geweke(gg_modele2_mult%>% mutate(Parameter = case_when(Parameter =
   scale_color_manual(name = NULL,
                      values = c(brewer.pal(n = 9, name = "Spectral"), NA),
                      labels = function(x) ifelse(x == "black", "", paste0("Chaîne n°", x))) +
-  theme(axis.text.y = element_markdown())
+  theme(axis.text.y = element_markdown(),
+        legend.position = "none")
 gelman / geweke
 ```
 
 Par ailleurs, les résultats de notre modèle avec 9 chaînes sont très proches des résultats du modèle à 1 chaîne :
 
 ```{r}
-tidy(modele2_fit_mult) %>% 
-  mutate(across(estimate:std.error, ~ round(.x, 3))) %>% 
+modele2_fit_mult$BUGSoutput$summary[1:2, 1:2] %>% 
+  as.data.frame() %>% rownames_to_column() %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>% 
   flextable() %>% 
-  set_header_labels(term = "Paramètre estimé", 
-                    estimate = "Estimation", 
-                    std.error = "Ecart-Type") %>% 
+  set_header_labels(rowname = "Paramètre estimé", 
+                    mean = "Estimation", 
+                    sd = "Ecart-Type") %>% 
   autofit()
 ```
 
@@ -698,7 +703,7 @@ tidy(modele2_fit_mult) %>%
 
 **Que vaut le nombre d’itérations pour les calculs ? Que vaut le nombre d’itérations « effectif » ?**
 
-Le nombre d'itérations pour notre calcul est de `r modele2_fit_thin$BUGSoutput$n.iter` mais nous avons mis un thin de 10, ce qui fait que nous avions gardé `r modele2_fit_thin$BUGSoutput$n.sims` itérations. Le nombre d'itéartions effectif est de `r round(ess_2_thin["a0"])` pour le paramètre $a_0$ et de `r round(ess_2_thin["b0"])` pour le paramètre $b_0$. Cela représente le nombre d'itérations qui ont apportée de l'information utile à notre modèle.
+Le nombre d'itérations pour notre calcul est de `r modele2_fit_thin$BUGSoutput$n.iter` mais nous avons mis un thin de 10, ce qui fait que nous avions gardé `r modele2_fit_thin$BUGSoutput$n.sims` itérations. Le nombre d'itérations effectif est de `r round(ess_2_thin["a0"])` pour le paramètre $a_0$ et de `r round(ess_2_thin["b0"])` pour le paramètre $b_0$. Cela représente le nombre d'itérations qui ont apportée de l'information utile à notre modèle.
 
 ## Question 4 
 
@@ -782,7 +787,7 @@ Etant donné qu'on a 2 lois à postériori pour estimer le paramètre d'une loi,
 
 On a un résumé par notre modèle qui est plus fidèle aux données que le modèle 1.
 
-```{r}
+```{r, fig.width = 10, fig.height = 8}
 poissons_moy <- tibble(
   anciennete = 0:15,
   poiss_moymin = exp(0.48 + anciennete * 0.17),
@@ -790,6 +795,7 @@ poissons_moy <- tibble(
   poiss_moymax = exp(1.38 + anciennete * 0.24)
 )
 ggplot() +
+  geom_hline(yintercept = 40, linetype = "dotted", color = "purple") +
   geom_ribbon(data = poissons_moy, aes(x = anciennete, ymin = poiss_moymin, ymax = poiss_moymax), fill = "lightgreen", alpha = 0.3) +
   geom_point(data = sncf_machines, aes(anciennete, nb_pannes)) +
   geom_line(data = poissons_moy, aes(x = anciennete, y = poiss_moymean), color = "green") +
@@ -797,12 +803,13 @@ ggplot() +
   geom_line(data = poissons_moy, aes(x = anciennete, y = poiss_moymax), color = "green", linetype = "dashed") +
   annotate("segment", x = 0, xend = 2, y = 125, yend = 125, color = "green") +
   annotate("segment", x = 0, xend = 2, y = 100, yend = 100, linetype = "dashed", color = "green") +
-  annotate("text", x = 3, y = 125, label = "Loi de Poisson 'moyenne'", hjust = 0) +
-  annotate("text", x = 3, y = 100, label = "'Intervalle de crédibilité' de la moyenne\nde la loi de Poisson", hjust = 0) +
+  annotate("text", x = 3, y = 125, label = "Moyenne des lois de Poisson 'moyennes'", hjust = 0) +
+  annotate("text", x = 3, y = 100, label = "'Intervalle de crédibilité' de la moyenne\ndes lois de Poisson", hjust = 0) +
   labs(x = "Ancienneté de la machine (en années)",
        y = "Nombre de pannes en un an")
-
 ```
+
+Les moyennes des lois de Poisson avec le $\lambda_i$ estimé estiment bien les données dont nous disposons. Toutefois, pour construire cette figure, nous avons émis l'hypothèse que $a_0$ et $b_0$ varient selon leur intervalle de crédibilité de façon simultanée et identique, ce qui n'est pas forcément vrai.
 
 ## Question 6 
 
@@ -842,6 +849,25 @@ Pour estimer la complexité du modèle, le pD est estimé et représente le nomb
 **D'après le DIC, quel modèle choisissez-vous entre M1 et M2 ?**
 
 En relevant les DIC de nos deux modèles, nous choissons le modèle M2. Ce dernier à un DIC nettement inférieur à celui du modèle 1, 69.4 contre  253. L'apport de la variable x (ancienneté de la machine) est donc associée une meilleur estimation du modèle. Le DIC vient apporter un argument de plus dans l'utilité d'ajouter l'ancienneté de la machine dans le modèle discutée dans la question 6 vis-à-vis du coefficient $b_0$.
+
+## Question 9
+
+**Selon le modèle que vous avez retenu, dire quelles machines (s'il y en a) ont une moyenne du nombre de pannes probablement (c'est à dire à 97,5%) supérieure à 40 pannes (valeur pour laquelle la machine sera remplacée) ?**
+
+Sur la dernière figure de la question 5, on peut voir que la borne inférieure de l'intervalle de crédibilité à 95% reste toujours en-dessous de la valeur seuil 40. Ainsi, sur nos données, il n'y a aucune machine qui a un nombre moyen de pannes supérieur à 40.
+
+On peut déterminer le nombre d'année d'ancienneté avant qu'une machine doive être remplacée :
+$$
+\begin{array}{l}
+e^{0.48 + x_i \times 0.17} > 40\\
+0.48+0.17\times x_i > log(40)\\
+0.17\times x_i > log(40)-0.48\\
+x_i > \frac {log(40)-0.48}{0.17}\\
+x_i > 18.9
+\end{array}
+$$
+
+Les machines ayant 19 ans et plus d'ancienneté seront donc à remplacer.
 
 # Modèle 3
 
@@ -932,7 +958,7 @@ plot_a0 / plot_b0 / plot_tau
 
 Au niveau des traceplot, les valeurs de $a_0$ et $b_0$ tournent autour d'une valeur : un peu moins de 1 pour $a_0$ et 0.2 pour $b_0$. Il y a un peu plus de variations que pour les modèles 1 et 2, mais cela ne s'écarte pas trop. En revanche, pour $\sigma^2$, beaucoup de valeurs sont plus dispersées.
 
-```{r}
+```{r, fig.width = 10, fig.height = 8}
 ggs_autocorrelation(gg_modele3 %>% 
                       mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
                                                    Parameter == "b0" ~ "b<sub>0</sub>",
@@ -942,11 +968,11 @@ ggs_autocorrelation(gg_modele3 %>%
 
 On voit, sur le graphique des auto-corrélation qu'on a des auto-corrélations importantes, ce qui est confirmé par l'effective sample size qui est autour de 5000 pour les 3 paramètres estimés (`r paste(round(ess_3[-3]), collapse = "/")`), ce qui est bien inférieur aux `r round(modele3_fit$BUGSoutput$n.sims)` itérations réellement faites. Nous allons donc mettre un thin à 10 afin d'essayer de casser ces auto-corrélations, tout en augmentant le nombre total d'itérations, en espérant que la variabilité d'estimation des paramètres sera réduite.
 
-```{r}
+```{r, warning = FALSE, message = FALSE, results = 'hide'}
 n_iter3 <- 40000
 n_thin3 <- 20
 set.seed(1993)
-modele3_fit_thin <-jags(
+modele3_fit_thin_ch1 <-jags(
   data = donnees,
   inits = inits_modele3,
   parameters.to.save = parametres_modele3,
@@ -955,9 +981,9 @@ modele3_fit_thin <-jags(
   n.burnin = n_burn3,
   n.thin = n_thin3,
   model.file = modele_3)
-modele3_fit_thin_mcmc <- as.mcmc(modele3_fit_thin)
-gg_modele3_thin <- ggs(modele3_fit_thin_mcmc)
-ess_3_thin <- effectiveSize(modele3_fit_thin_mcmc)
+modele3_fit_thin_ch1_mcmc <- as.mcmc(modele3_fit_thin_ch1)
+gg_modele3_thin_ch1 <- ggs(modele3_fit_thin_ch1_mcmc)
+ess_3_thin_ch1 <- effectiveSize(modele3_fit_thin_ch1_mcmc)
 ```
 
 ```{r, fig.width = 8, fig.height = 12}
@@ -965,7 +991,7 @@ vec_par <- c("a0", "b0", "tau")
 vec_nom <- c("a<sub>0</sub>", "b<sub>0</sub>", "&sigma;<sup>2</sup>")
 for (i in vec_par) {
   assign(x = paste0("plot_", i),
-         value = ggplot(gg_modele3_thin %>% 
+         value = ggplot(gg_modele3_thin_ch1 %>% 
                           filter(Parameter == i) %>% 
                           mutate(value = ifelse(Parameter == "tau", 1 / value, value)),
                         aes(x = Iteration, y = value)) +
@@ -980,81 +1006,247 @@ for (i in vec_par) {
 plot_a0 / plot_b0 / plot_tau
 ```
 
-```{r}
-ggs_autocorrelation(gg_modele3_thin %>% 
+Nous avons tenté de faire un thin de 10, mais cela ne nous semblait pas suffisant sur le plot des auto-corrélations. Nous avons donc augmenté notre thin à 20. Sur le traceplot pour chaque paramètre estimé, les valeurs restent autour des mêmes zones avec un peu de variabilité résiduelle, mais nous considérons que ce la a bien convergé.
+
+```{r, fig.width = 10, fig.height = 8}
+ggs_autocorrelation(gg_modele3_thin_ch1 %>% 
                       mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
                                                    Parameter == "b0" ~ "b<sub>0</sub>",
                                                    Parameter == "tau" ~ "&tau;",
                                                    TRUE ~ as.character(Parameter))))
 ```
 
+Sur le plot des auto-corrélations, nous remarquons que nos itérations sont ben indépendantes les unes des autres. Cela est corroboré par les effective sample sizes pour $a_0$, $b_0$, la déviance et $\tau$ (`r paste(round(ess_3_thin_ch1), collapse = "/")`) qui sont proches des `r round(modele3_fit_thin_ch1$BUGSoutput$n.sims)` itérations effectuées.
+
+Pour nous assurer de la bonne convergence de nos paramètres, nous avons tenté plusieurs initiations des 3 paramètres. Nous avons initié $a_0$ et $b_0$ à -5, 0 et 5, et $\tau$ à 0.05, 0.5, 1 et 2.
+
+*(Les codes ont été commenté dans le Rmd du fait du temps pour obtenir le modèle et les graphes. Nous avons sauvegardé des objets R et des images pour rendre les résultats.)*
+
 ```{r}
-grille <- expand.grid(a0 = c(5, 0, -5), b0 = c(5, 0, -5), tau =c(0.05, 0.5, 1, 2)) %>% 
-  as.data.frame()
-inits_modele3_mult <- list()
-for (i in seq_len(nrow(grille))) {
-  inits_modele3_mult[[i]] <- list(a0 = grille[i, "a0"], b0 = grille[i, "b0"], tau = grille[i, "tau"])
-}
-set.seed(1993)
-modele3_fit_thin <-jags(
-  data = donnees,
-  inits = inits_modele3_mult,
-  parameters.to.save = parametres_modele3,
-  n.chains = length(inits_modele3_mult),
-  n.iter = n_iter3 * n_thin3,
-  n.burnin = n_burn3,
-  n.thin = n_thin3,
-  model.file = modele_3)
-save(modele3_fit_thin,
-     file = "modele3_thin.Rdata")
-modele3_fit_thin_mcmc <- as.mcmc(modele3_fit_thin)
-gg_modele3_thin <- ggs(modele3_fit_thin_mcmc)
-ess_3_thin <- effectiveSize(modele3_fit_thin_mcmc)
+# grille <- expand.grid(a0 = c(5, 0, -5), b0 = c(5, 0, -5), tau =c(0.05, 0.5, 1, 2)) %>% 
+#   as.data.frame()
+# inits_modele3_mult <- list()
+# for (i in seq_len(nrow(grille))) {
+#   inits_modele3_mult[[i]] <- list(a0 = grille[i, "a0"], b0 = grille[i, "b0"], tau = grille[i, "tau"])
+# }
+# set.seed(1993)
+# modele3_fit_thin <-jags(
+#   data = donnees,
+#   inits = inits_modele3_mult,
+#   parameters.to.save = parametres_modele3,
+#   n.chains = length(inits_modele3_mult),
+#   n.iter = n_iter3 * n_thin3,
+#   n.burnin = n_burn3,
+#   n.thin = n_thin3,
+#   model.file = modele_3)
+# save(modele3_fit_thin,
+#      file = "modele3_thin.Rdata")
+load("modele3_thin.Rdata")
+# modele3_fit_thin_mcmc <- as.mcmc(modele3_fit_thin)
+# gg_modele3_thin <- ggs(modele3_fit_thin_mcmc)
+# ess_3_thin <- effectiveSize(modele3_fit_thin_mcmc)
 ```
 
 ```{r, fig.width = 8, fig.height = 12}
-vec_par <- c("a0", "b0", "tau")
-vec_nom <- c("a<sub>0</sub>", "b<sub>0</sub>", "&sigma;<sup>2</sup>")
-for (i in vec_par) {
-  assign(x = paste0("plot_", i),
-         value = ggplot(gg_modele3_thin %>% 
-                          filter(Parameter == i) %>% 
-                          mutate(value = ifelse(Parameter == "tau", 1 / value, value)),
-                        aes(x = Iteration, y = value, color = as.factor(Chain))) +
-           geom_line(show.legend = FALSE, alpha = 0.3) +
-           scale_x_continuous(labels = scales::comma_format()) +
-           labs(x = "Itération",
-                y = paste0(vec_nom[match(i, vec_par)]),
-                title = paste0("Traceplot de l'estimation de ", vec_nom[match(i, vec_par)], " par MCMC avec 36 chaînes")) +
-           theme(plot.title = element_markdown()))
-}
-plot_abt <- plot_a0 / plot_b0 / plot_tau
-save(plot_a0, plot_b0, plot_tau, plot_abt,
-     file = "donnee_graphiques.Rdata")
-ggsave(filename = "plot_abt_36c.png",
-       plot = plot_abt,
-       device = "png",
-       width = 8,
-       height = 12)
+# vec_par <- c("a0", "b0", "tau")
+# vec_nom <- c("a<sub>0</sub>", "b<sub>0</sub>", "&sigma;<sup>2</sup>")
+# for (i in vec_par) {
+#   assign(x = paste0("plot_", i),
+#          value = ggplot(gg_modele3_thin %>% 
+#                           filter(Parameter == i) %>% 
+#                           mutate(value = ifelse(Parameter == "tau", 1 / value, value)),
+#                         aes(x = Iteration, y = value, color = as.factor(Chain))) +
+#            geom_line(show.legend = FALSE, alpha = 0.3) +
+#            scale_x_continuous(labels = scales::comma_format()) +
+#            labs(x = "Itération",
+#                 y = paste0(vec_nom[match(i, vec_par)]),
+#                 title = paste0("Traceplot de l'estimation de ", vec_nom[match(i, vec_par)], " par MCMC avec 36 chaînes")) +
+#            theme(plot.title = element_markdown()))
+# }
+# plot_abt <- plot_a0 / plot_b0 / plot_tau
+# save(plot_a0, plot_b0, plot_tau, plot_abt,
+#      file = "donnee_graphiques.Rdata")
+# ggsave(filename = "plot_abt_36c.png",
+#        plot = plot_abt,
+#        device = "png",
+#        width = 8,
+#        height = 12)
 ```
+
+```{r, echo = FALSE}
+include_graphics("plot_abt_36c.png")
+```
+
+Sur les traceplots, les 3 paramètres ont l'air de converger vers une valeur identique à ce qui était vu sur le modèle pour 1 chaîne. La valeur de $\sigma^2=\frac {1}{\tau}$ est sujette à plus de variabilité cependant mais ne s'écarte pas trop. Les critères de convergence de Geweke et Gelman nous confirme cette convergence. Le $\hat R$ de Gelman est à 1, et les critère de convergence de Geweke reste entre -2DS et 2DS pour la quasi-totalité des chaînes. Nous considérons donc que le modèle a bien convergé.
+
+```{r, fig.height = 10, fig.width = 12}
+# gelman3 <- ggs_Rhat(gg_modele3_thin %>% mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
+#                                                    Parameter == "b0" ~ "b<sub>0</sub>",
+#                                                    Parameter == "tau" ~ "&tau;",
+#                                                    TRUE ~ as.character(Parameter)))) +
+#   labs(y = "Paramètre",
+#        x = expression(hat("R"))) +
+#   theme(axis.text.y = element_markdown())
+# geweke3 <- ggs_geweke(gg_modele3_thin%>% mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
+#                                                    Parameter == "b0" ~ "b<sub>0</sub>",
+#                                                    TRUE ~ as.character(Parameter)))) +
+#   labs(y = "Paramètre",
+#        title = "Critère de convergence de Geweke") +
+#   theme(axis.text.y = element_markdown(),
+#         legend.position = "none")
+# gelgew <- gelman3 / geweke3
+# ggsave(filename = "plot_gelman_geweke.png",
+#        device = "png",
+#        plot = gelgew,
+#        height = 10, width = 12)
+```
+
+```{r, echo = FALSE}
+include_graphics("plot_gelman_geweke.png")
+```
+
+```{r, eval = FALSE, fig.width = 14, fig.height = 10}
+# autocor <- ggs_autocorrelation(gg_modele3_thin %>% 
+#                       mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
+#                                                    Parameter == "b0" ~ "b<sub>0</sub>",
+#                                                    Parameter == "tau" ~ "&tau;",
+#                                                    TRUE ~ as.character(Parameter))))
+# plot_1 <- autocor$data %>% 
+#   filter(Lag < 21, Chain %in% c(1:18)) %>% 
+#   ggplot(aes(x = Lag, y = Autocorrelation, color = Parameter)) +
+#   geom_col(show.legend = FALSE) +
+#   facet_grid(Parameter ~ Chain)
+# plot_2 <- autocor$data %>% 
+#   filter(Lag < 21, Chain %in% c(18:36)) %>% 
+#   ggplot(aes(x = Lag, y = Autocorrelation, color = Parameter)) +
+#   geom_col(show.legend = FALSE) +
+#   facet_grid(Parameter ~ Chain)
+# plot_tot_autocor <- plot_1 / plot_2
+# ggsave(plot = plot_tot_autocor,
+#        filename = "plot_autocor.png",
+#        device = "png",
+#        width = 14, height = 10)
+```
+
+```{r, echo = FALSE}
+include_graphics("plot_autocor.png")
+```
+
+Le graphique des auto-corrélations nous montre quant à lui qu'il n'y a pas d'auto-corrélation résiduelle sur nos chaînes.
+
+Les résultats pour les 2 modèles (1 chaîne vs 36 chaînes) sont présentés dans le tableau suivant. On peut remarquer que les résultats sont presque identiques, ce qui nous rassure pour prendre le résultat du modèle à 1 chaîne comme résultat principal. Par ailleur, on remarque que l'écart-type de $\tau$ est très élevé malgré le grand nombre d'itérations. Cela peut nous indiquer que la variable $\varepsilon_i$ de chaque machine suivant une loi normale de même variance pour toutes les machines n'est pas forcément pertinente dans notre modèle. La variabilité n'est peut-être pas tout à fait identique entre chaque machine et cela pourrait empêcher l'estimation d'être précise.
 
 ```{r}
-ggs_autocorrelation(gg_modele3_thin %>% 
-                      mutate(Parameter = case_when(Parameter == "a0" ~ "a<sub>0</sub>",
-                                                   Parameter == "b0" ~ "b<sub>0</sub>",
-                                                   Parameter == "tau" ~ "&tau;",
-                                                   TRUE ~ as.character(Parameter))))
+modele3_fit_thin_ch1$BUGSoutput$summary[c(1:2, 4), 1:2] %>% 
+  as.data.frame() %>% rownames_to_column() %>% 
+  left_join(modele3_fit_thin$BUGSoutput$summary[c(1:2, 4), 1:2] %>% 
+  as.data.frame() %>% rownames_to_column(),
+  by = "rowname") %>% 
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>% 
+  flextable() %>% 
+  set_header_labels(rowname = "Paramètre estimé",
+                    mean.x = "Estimation",
+                    sd.x = "Ecart-Type",
+                    mean.y = "Estimation",
+                    sd.y = "Ecart-Type") %>% 
+  add_header_row(values = c(" ", "1 chaîne", "  ", "36 chaînes", "   ")) %>% 
+  merge_at(i = 1, j = 2:3, part = "header") %>% 
+  merge_at(i = 1, j = 4:5, part = "header") %>% 
+  theme_booktabs() %>% 
+  align(i = 1:2, j = 1:5, align = "center", part = "header") %>% 
+  autofit()
 ```
 
+Nous prenons donc les résultats de notre modèle à 1 chaîne avec 800000 itérations dont 1000 itérations de burn-in et un thin de 20.
 
+## Question 3
 
+**Que vaut le nombre d’itérations pour les calculs? Que vaut le nombre d’itérations
+"effectif" ?**
 
+Le nombre d'itérations faites et conservées est de `r modele3_fit_thin_ch1$BUGSoutput$n.sims`. 
 
+Les nombres d'itérations effectives pour les différents paramètres estimés sont :
 
+* pour $a_0$ `r round(ess_3_thin_ch1["a0"])`;
+* pour $b_0$ `r round(ess_3_thin_ch1["b0"])`;
+* pour $\tau$ `r round(ess_3_thin_ch1["tau"])`;
+* pour la déviance `r round(ess_3_thin_ch1["deviance"])`.
 
+Ces nombres effectifs proches du nombre d'itérations gardées montrent l'indépendance de nos itérations.
 
+## Question 4
 
+**Donnez la moyenne a posteriori et l'intervalle de crédibilité à 95% de a0, b0 et tau.**
 
+```{r}
+resm3 <- summary(modele3_fit_thin_ch1_mcmc)[[1]] %>% as.data.frame()
+resq3 <- summary(modele3_fit_thin_ch1_mcmc)[[2]] %>% as.data.frame()
+ic3a <- paste0(round(resm3[["Mean"]][1], 2), "[", round(resq3[["2.5%"]][1], 2), ";", round(resq3[["97.5%"]][1], 2),"]")
+ic3b0 <- paste0(round(resm3[["Mean"]][2], 2), "[", round(resq3[["2.5%"]][2], 2), ";", round(resq3[["97.5%"]][2], 2),"]")
+ic3tau <- paste0(round(resm3[["Mean"]][4], 2), "[", round(resq3[["2.5%"]][4], 2), ";", round(resq3[["97.5%"]][4], 2),"]")
+ic3sig <- paste0(round(1/resm3[["Mean"]][4], 2), "[", round(1/resq3[["97.5%"]][4], 2), ";", round(1/resq3[["2.5%"]][4], 2),"]")
+```
 
+L'estimation de $a_0$ nous donne la moyenne et l'intervalle de crédibilité à 95% suivant : `r paste(ic3a)`.
+L'estimation de $b_0$ nous donne la moyenne et l'intervalle de crédibilité à 95% suivant : `r paste(ic3b0)`.
+L'estimation de $\tau$ nous donne la moyenne et l'intervalle de crédibilité à 95% suivant : `r paste(ic3tau)`, soit un intervalle de crédibilité pour $\sigma^2$ de `r paste(ic3sig)`.
+
+Nous avons tenté de représenter ces moyennes de lois de Poisson sur les données dont nous disposons. Les lignes "moyenne", "minimum" et "maximum" représentent les moyennes des lois de Poisson lorsque $a_0$ et $b_0$ sont  respectivement toutes les 2 à leur valeur moyenne, à la borne inférieure ou supérieure de leur intervalle de crédibilité à 95%. De plus, autour de ces estimations de moyenne, nous avons représenté la variabilité inter-machine $\varepsilon_i$ qui est assuméee comme l'intervalle de confiance à 95% de la loi normale suivie par $\varepsilon_i (\mathcal{N}(0, \sigma^2))$ pour le $\sigma^2$ moyen estimé.
+
+```{r, fig.width = 10, fig.height = 8}
+poissons_moy <- tibble(
+  anciennete = 0:15,
+  poiss_moymin = exp(0.08 + anciennete * 0.14),
+  poiss_moymininf = exp(0.08 + anciennete * 0.14 + qnorm(0.025, mean = 0, sd = 1/15)),
+  poiss_moyminsup = exp(0.08 + anciennete * 0.14 + qnorm(0.975, mean = 0, sd = 1/15)),
+  poiss_moymean = exp(0.86 + anciennete * 0.21),
+  poiss_moymeaninf = exp(0.86 + anciennete * 0.21 + qnorm(0.025, mean = 0, sd = 1/15)),
+  poiss_moymeansup = exp(0.86 + anciennete * 0.21 + qnorm(0.975, mean = 0, sd = 1/15)),
+  poiss_moymax = exp(1.53 + anciennete * 0.28),
+  poiss_moymaxinf = exp(1.53 + anciennete * 0.28 + qnorm(0.025, mean = 0, sd = 1/15)),
+  poiss_moymaxsup = exp(1.53 + anciennete * 0.28 + qnorm(0.975, mean = 0, sd = 1/15))
+)
+ggplot() +
+  geom_point(data = sncf_machines, aes(anciennete, nb_pannes)) +
+  geom_ribbon(data = poissons_moy, aes(x = anciennete, ymin = poiss_moymeaninf, ymax = poiss_moymeansup), fill = "green", alpha = 0.3) +
+  geom_line(data = poissons_moy, aes(x = anciennete, y = poiss_moymean, color = "Moyenne")) +
+  geom_ribbon(data = poissons_moy, aes(x = anciennete, ymin = poiss_moymininf, ymax = poiss_moyminsup), fill = "blue", alpha = 0.3) +
+  geom_line(data = poissons_moy, aes(x = anciennete, y = poiss_moymin, color = "Inférieur"), linetype = "dashed") +
+  geom_ribbon(data = poissons_moy, aes(x = anciennete, ymin = poiss_moymaxinf, ymax = poiss_moymaxsup), fill = "red", alpha = 0.3) +
+  geom_line(data = poissons_moy, aes(x = anciennete, y = poiss_moymax, color = "Supérieur"), linetype = "dashed") +
+  scale_color_manual(name = NULL,
+                     values = c("blue", "green", "red")) +
+  labs(x = "Ancienneté de la machine (en années)",
+       y = "Nombre de pannes en un an")
+```
+
+Nous pouvons voir sur la réprésentation que le modèle englobe maintenant toutes les machines. Cependant, on remarque aussi que l'incertitude devient plus grande pour les bornes. La droite des moyennes des lois de Poissons "moyennes" a l'air de bien représenter nos données, mais la borne haute s'envole beaucoup plus haut que le dernier modèele à cause du coefficient $b_0$ plus haut.
+
+De plus, tout comme le modèle 2, nous avons fait l'hypothèse que $a_0$ et $b_0$ suivent leur intervalle de crédibilité à 95% de façon parallèle, et nous n'avons pris le $\tau$ que moyen.
+
+## Question 5
+
+**Que vaut le DIC ? Que vaut l'estimation de la complexité du modèle ? Vous semble-t-elle
+logique ?**
+
+```{r}
+dic3 <- round(modele3_fit_thin_ch1$BUGSoutput$DIC, 4)
+complexite3 <- round(modele3_fit_thin_ch1$BUGSoutput$pD, 4)
+```
+
+Le DIC du modèle vaut `r dic3`.
+
+Pour estimer la complexité du modèle, le pD est estimé et représente le nombre effectif de paramètres estimés. Pour notre modèle, il vaut `r complexite3`. 
+
+Nous avions 3 paramètres à estimer : $a_0$, $b_0$ et $\tau$, donc nous nous attendions à avoir environ un pD de 3. Mais comme évoqué plus tôt, le paramètre $\tau$ a un écart-type élevé et nous avions émis l'hypothèse que les machines n'avaient peut-être pas toutes la même variabilité inter-individuelle. Ici, on a l'impression que cela va dans le sens de cette hypothèse, avec un nombre effectif de paramètres estimés environ augmenté de 10 par rapport à ce que nous pensions trouver sur un échantillon de 10 machines. Nous pensons donc que le modèle spécifié n'est pas le plus adapté aux données.
+
+## Question 6
+
+**D'après le DIC, quel modèle choisissez-vous entre M1, M2 et M3 ?**
+
+Le DIC le plus bas est celui du modèle 2 donc c'est le modèle que nous choisissons au final.
+
+De plus, même si le DIC du modèle 3 est voisin, il aurait pu être encore plus proche de celui du modèle 2 voire un peu inférieur que nous aurions choisi le modèle 2 car le modèle est beaucoup plus complexe comme l'indique le nombre effectif de paramètres estimés. On gagne un peu en qualité de représentativité des données mais au prix d'un modèle trop complexe. 
 
 
